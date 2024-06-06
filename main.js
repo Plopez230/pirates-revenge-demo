@@ -9,6 +9,8 @@ class PlayerGrid extends THREE.Object3D
         this.cells = [];
         this.ships = [];
 
+        this.position.set(-3,0,-3);
+
         this.default_material = new THREE.MeshPhongMaterial(
             { color: 0x606060 * 1, side: THREE.DoubleSide });
         this.default_material.opacity = 0.1;
@@ -26,23 +28,59 @@ class PlayerGrid extends THREE.Object3D
         var player_grid = this;
 
         this.ship_loader.load(
-            'ship.glb',
+            'ship2.glb',
             function ( gltf ) {
-                gltf.scene.scale.set(4,4,4);
-                gltf.scene.position.set(- sqLength * 6/ 2, 2, sqLength / 2);
+                gltf.scene.rotation.set(0, -Math.PI / 2, 0);
+                gltf.scene.position.set(1,0,0);
                 gltf.scene.traverse((o) => {
                     if (o.isMesh){
                         o.default_material = o.material;
                         o.hover_material = player_grid.hover_material;
+                        o.position.set(2, 0.6, 0.5);
                     }
-                  });
+                });
                 player_grid.ships.push(gltf.scene);
+                player_grid.ship2 = gltf.scene;
                 player_grid.add(gltf.scene);
             }
         );
 
+        this.ship_loader.load(
+            'ship3.glb',
+            function ( gltf ) {
+                gltf.scene.rotation.set(0, -Math.PI / 2, 0);
+                gltf.scene.position.set(3,0,3);
+                gltf.scene.traverse((o) => {
+                    if (o.isMesh){
+                        o.default_material = o.material;
+                        o.hover_material = player_grid.hover_material;
+                        o.position.set(1.5, 1, 0.5);
+                    }
+                });
+                player_grid.ships.push(gltf.scene);
+                player_grid.ship3 = gltf.scene;
+                player_grid.add(gltf.scene);
+            }
+        );
 
-        this.add(this.ships[0]);
+        this.ship_loader.load(
+            'ship4.glb',
+            function ( gltf ) {
+                gltf.scene.rotation.set(0, 0, 0);
+                gltf.scene.position.set(2,0,1);
+                gltf.scene.traverse((o) => {
+                    if (o.isMesh){
+                        o.default_material = o.material;
+                        o.hover_material = player_grid.hover_material;
+                        o.rotation.set(0.04, 0, 0);
+                        o.position.set(2, 1, 0.5);
+                    }
+                });
+                player_grid.ships.push(gltf.scene);
+                player_grid.ship4 = gltf.scene;
+                player_grid.add(gltf.scene);
+            }
+        );
 
         const shape = new THREE.Shape()
             .moveTo( 0, 0 )
@@ -56,26 +94,24 @@ class PlayerGrid extends THREE.Object3D
             
         let geometry = new THREE.ShapeGeometry( shape );
 
-        for (let x_ = -3; x_ < 3; x_++)
+        const geometryPoints =
+            new THREE.BufferGeometry().setFromPoints( points );
+        for (let x_ = 0; x_ < 6; x_++)
         {
-            for (let z_ = -3; z_ < 3; z_++)
+            for (let z_ = 0; z_ < 6; z_++)
             {
-            
-                const geometryPoints =
-                    new THREE.BufferGeometry().setFromPoints( points );
             
                 let mesh = new THREE.Mesh(geometry, this.default_material);
                 mesh.default_material = this.default_material;
                 mesh.hover_material = this.hover_material;
-                mesh.position.set(x + x_ * sqLength, y, z + z_ * sqLength );
+                mesh.position.set(x_ * sqLength, 0, z_ * sqLength );
                 mesh.rotation.set(Math.PI / 2, 0, 0 );
                 this.add(mesh);
                 this.cells.push(mesh);
             
                 let line = new THREE.Line( geometryPoints, this.line_material);
-                line.position.set(x + x_ * sqLength, y, z + z_ * sqLength );
+                line.position.set(x_ * sqLength, 0, z_ * sqLength );
                 line.rotation.set(Math.PI / 2, 0, 0 );
-                line.scale.set(1, 1, 1);
                 this.add( line );
             }
         }
@@ -90,7 +126,7 @@ let isUserInteracting = false,
     lat = 0, onPointerDownLat = 0,
     phi = 0, theta = 0;
 
-const sqLength = 2;
+const sqLength = 1;
 
 const squareShape = new THREE.Shape()
     .moveTo( 0, 0 )
@@ -122,7 +158,7 @@ function init() {
     // invert the geometry on the x-axis so that all of the faces point inward
     geometry.scale( - 1, 1, 1 );
 
-    const texture = new THREE.TextureLoader().load( 'descarga.jpg' );
+    const texture = new THREE.TextureLoader().load( 'space.jpg' );
     texture.colorSpace = THREE.SRGBColorSpace;
     const material = new THREE.MeshBasicMaterial( { map: texture } );
 
@@ -130,8 +166,12 @@ function init() {
 
     scene.add( mesh );
 
-    var grid3 = new PlayerGrid(-10, 0, 0);
-    scene.add(grid3);
+    var grid1 = new PlayerGrid(0, 0, 0);
+    grid1.position.set(-8,  0, -3);
+    var grid2 = new PlayerGrid(0, 0, 0);
+    grid2.rotation.set(0, Math.PI, 0);
+    grid2.position.set(8,  0, 3);
+    scene.add(grid1, grid2);
 
     renderer = new THREE.WebGLRenderer();
     renderer.setPixelRatio( window.devicePixelRatio );
@@ -184,7 +224,7 @@ function init() {
 
 
     window.addEventListener( 'resize', onWindowResize );
-    document.addEventListener('mousemove', onHover(grid3.ships));
+    document.addEventListener('mousemove', onHover(grid1.cells));
 
 }
 
@@ -292,9 +332,9 @@ function animate() {
     phi = THREE.MathUtils.degToRad( 90 - lat );
     theta = THREE.MathUtils.degToRad( lon );
 
-    const x = 10 * Math.sin( phi ) * Math.cos( theta );
-    const y = 10 * Math.cos( phi );
-    const z = 10 * Math.sin( phi ) * Math.sin( theta );
+    const x = 6 * Math.sin( phi ) * Math.cos( theta );
+    const y = 6 * Math.cos( phi );
+    const z = 6 * Math.sin( phi ) * Math.sin( theta );
 
     camera.position.set(-5 * sqLength + x, y, z);
     camera.lookAt( -5 * sqLength, - sqLength, 0 );
