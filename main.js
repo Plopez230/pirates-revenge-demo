@@ -26,12 +26,9 @@ class PiratesRevengeGame
         this.locked = [];
 
         this._lights();
-        this._sound();
         this._objects();
         this._renderer();
         this._listeners();
-
-        this.placement_init();
     }
 
     _lights()
@@ -90,8 +87,15 @@ class PiratesRevengeGame
 
     _listeners()
     {
-        document.addEventListener( 'wheel', onDocumentMouseWheel );
         window.addEventListener('resize', onWindowResize);
+    }
+
+    start()
+    {
+        document.getElementById("info2").style.visibility = "hidden";
+        document.addEventListener( 'wheel', onDocumentMouseWheel );
+        this._sound();
+        this.placement_init();
     }
 
     placement_init()
@@ -537,7 +541,11 @@ class SkyBox extends THREE.Object3D
     }
 }
 
-const game = new PiratesRevengeGame();
+var game = new PiratesRevengeGame();
+
+document.getElementById("play").addEventListener("click", function(){
+    game.start();
+})
 
 function onWindowResize()
 {
