@@ -119,7 +119,6 @@ class PiratesRevengeGame
         document.removeEventListener('mousemove', placement_mousemove);
         document.addEventListener('mousemove', shoot_mousemove);
         document.addEventListener('click', shoot_click);
-        this.hit.start_animations();
     }
 
     placement_timer(duration)
@@ -250,10 +249,16 @@ class PiratesRevengeGame
 
     shoot_shoot()
     {
+        document.removeEventListener('click', shoot_click);
+        document.removeEventListener('mousemove', shoot_mousemove);
+
         let cell = this.mouse_cell;
+        this.deselect_cell();
 
         if (cell == null)
         {
+            document.addEventListener('click', shoot_click);
+            document.addEventListener('mousemove', shoot_mousemove);
             return;
         }
 
@@ -280,7 +285,14 @@ class PiratesRevengeGame
         {
             this.hit.miss();
         }
-        this.hit.start_animations();
+
+        setTimeout(
+            () => {
+                document.addEventListener('click', shoot_click);
+                document.addEventListener('mousemove', shoot_mousemove);
+            },
+            2800
+        )
     }
 
     placement_hover(event)
@@ -310,6 +322,15 @@ class PiratesRevengeGame
         }
 
         this.placement_preview();
+    }
+
+    deselect_cell()
+    {
+        if (this.mouse_cell != null)
+        {
+            this.mouse_cell.object.material = this.mouse_cell.object.default_material;
+            this.mouse_cell = null;
+        }
     }
 
     placement_preview()
