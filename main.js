@@ -1,15 +1,363 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-class PlayerGrid extends THREE.Object3D
+
+class PiratesRevengeGame
 {
-    constructor(x, y, z)
+    constructor()
+    {
+        this.container = document.getElementById('container');
+        this.camera = new THREE.PerspectiveCamera(
+            75, window.innerWidth / window.innerHeight, 1, 1100);
+        this.scene = new THREE.Scene();
+        this.renderer = new THREE.WebGLRenderer();
+
+        this.mouse_cell = null;
+        this.pointer_down_x = 0;
+        this.theta = 0;
+        this.interacting = false;
+        this.lon = 0;
+        this.pointer_down_lon = 0;
+
+        this.state = "ship_0";
+        this.player = 1;
+        this.ship = 0;
+        this.ship_dir = 1;
+        this.locked = [];
+
+        this._lights();
+        this._sound();
+        this._objects();
+        this._renderer();
+        this._listeners();
+
+        this.placement_init();
+    }
+
+    _lights()
+    {
+        this.ambient_light = new THREE.AmbientLight(0xffffff, 0.3);
+        this.scene.add(this.ambient_light);
+
+        this.directional_light = new THREE.DirectionalLight(0xffffaa, 5);
+        this.directional_light.position.set(100, 100, 0);
+        this.scene.add(this.directional_light);
+    }
+
+    _sound()
+    {
+        this.listener = new THREE.AudioListener();
+        this.camera.add(this.listener);
+
+        this.sound = new THREE.Audio(this.listener);
+        var sound_ = this.sound;
+
+        this.audioLoader = new THREE.AudioLoader();
+        this.audioLoader.load(
+            'pirates_revenge.mp3',
+            function(buffer) {
+                sound_.setBuffer(buffer);
+                sound_.setLoop(true);
+                sound_.setVolume(0.5);
+                sound_.play();
+            });
+    }
+
+    _objects()
+    {
+        this.home_grid = new PlayerGrid(0, 0, 0);
+        this.home_grid.position.set(0,  0, 0);
+        this.scene.add(this.home_grid);
+
+        this.visitor_grid = new PlayerGrid(0, 0, 0);
+        this.visitor_grid.rotation.set(0, Math.PI, 0);
+        this.visitor_grid.position.set(8,  0, 3);
+        // this.scene.add(this.visitor_grid);
+
+        this.skybox = new SkyBox();
+        this.scene.add(this.skybox);
+    }
+
+    _renderer()
+    {
+        this.renderer = new THREE.WebGLRenderer();
+        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setAnimationLoop(animate);
+        this.container.appendChild(this.renderer.domElement);
+        this.container.style.touchAction = 'none';
+    }
+
+    _listeners()
+    {
+        document.addEventListener( 'wheel', onDocumentMouseWheel );
+        window.addEventListener('resize', onWindowResize);
+    }
+
+    placement_init()
+    {
+        this.placement_timer(7);
+        this.locked = [];
+        document.addEventListener('click', placement_click);
+        document.addEventListener('contextmenu', placement_contextmenu);
+        document.addEventListener('mousemove', placement_mousemove);
+    }
+
+    shoot_init()
+    {
+        clearInterval(this.interval);
+        this.progress_element.style.visibility = "hidden";
+        document.removeEventListener('click', placement_click);
+        document.removeEventListener('contextmenu', placement_contextmenu);
+        document.removeEventListener('mousemove', placement_mousemove);
+        document.addEventListener('mousemove', shoot_mousemove);
+    }
+
+    placement_timer(duration)
+    {
+        let timer = duration * 5;
+        let max_time = timer;
+        let timer_element = document.getElementById('timer');
+        this.progress_element = document.getElementById('progress');
+        
+        this.progress_element.style.visibility = "unset";
+
+        let _this = this;
+
+        this.interval = setInterval(
+            function () {
+                timer_element.style.width = `${(100*timer/max_time)}%`;
+                if (timer > -1) {
+                    timer --;
+                } else {
+                    _this.placement_place_random();
+                    _this.shoot_init();
+                }
+            },
+            200);
+    }
+
+    _is_valid_placement(pos, dir)
+    {
+        var ship = this._get_current_ship();
+        var hover_pos = pos;
+        var cells = [];
+
+        if (ship != null && hover_pos != null)
+        {
+            for (let x = 0; x < this.ship + 2; x++)
+            {
+                var x_ = hover_pos[0] + dir * x;
+                var z_ = hover_pos[1] + (1 - dir) * x;
+
+                if (x_ < 0 || x_ > 5)
+                {
+                    return false;
+                }
+
+                if (z_ < 0 || z_ > 5)
+                {
+                    return false;
+                }
+
+                for (let i = 0; i < this.locked.length; i++)
+                {
+                    if (this.locked[i][0] == x_ && this.locked[i][1] == z_)
+                    {
+                        return false;
+                    }
+                }
+
+                cells.push([x_, z_]);
+            }
+        }
+
+        else
+        {
+            return false;
+        }
+
+        return cells;
+    }
+
+    _get_current_grid()
+    {
+        if (this.player == 1)
+        {
+            return this.home_grid;
+        }
+
+        if (this.player == -1)
+        {
+            return this.visitor_grid;
+        }
+    }
+
+    _get_current_ship()
+    {
+        var grid = this._get_current_grid();
+
+        if (grid != null && this.ship >= 0 && this.ship <= 2)
+        {
+            return grid.ships[this.ship];
+        }
+    }
+
+    shoot_hover(event)
+    {
+        var mouse3D = new THREE.Vector3(
+            (event.clientX / window.innerWidth) * 2 - 1,   
+            -(event.clientY / window.innerHeight) * 2 + 1,  
+            0.5 );
+        var raycaster = new THREE.Raycaster();                                        
+        raycaster.setFromCamera(mouse3D, this.camera);
+        var intersects = raycaster.intersectObjects(
+            this._get_current_grid().cells, true);
+
+        if (intersects.length > 0)
+        {
+            var selected = intersects[0];
+            if (selected != this.mouse_cell)
+            {
+                if (this.mouse_cell != null)
+                {
+                    this.mouse_cell.object.material =
+                        this.mouse_cell.object.default_material;
+                }
+                this.mouse_cell = selected;
+                selected.object.material = selected.object.hover_material;
+            }
+        }
+        else
+        {
+            if (this.mouse_cell != null)
+            {
+                this.mouse_cell.object.material =
+                    this.mouse_cell.object.default_material;
+            }
+            this.mouse_cell = null;
+        }
+    }
+
+    placement_hover(event)
+    {
+        var mouse3D = new THREE.Vector3(
+            (event.clientX / window.innerWidth) * 2 - 1,   
+            -(event.clientY / window.innerHeight) * 2 + 1,  
+            0.5 );
+        var raycaster = new THREE.Raycaster();                                        
+        raycaster.setFromCamera(mouse3D, this.camera);
+        var intersects = raycaster.intersectObjects(
+            this._get_current_grid().cells, true);
+
+        if (intersects.length > 0)
+        {
+            var selected = intersects[0];
+
+            if (selected != this.mouse_cell)
+            {
+                this.mouse_cell = selected;
+            }
+        }
+
+        else
+        {
+            this.mouse_cell = null;
+        }
+
+        this.placement_preview();
+    }
+
+    placement_preview()
+    {
+        var ship = this._get_current_ship();
+        var cell = this.mouse_cell;
+
+        if (ship == null)
+        {
+            return;
+        }
+
+        if (cell == null
+            || this._is_valid_placement(
+                cell.object.value, this.ship_dir) === false)
+        {
+            ship.visible = false;
+            return;
+        }
+
+        ship.position.set(
+            cell.object.value[0], 0, cell.object.value[1]);
+        ship.rotate(this.ship_dir);
+        ship.set_hover_material();
+        ship.visible = true;
+    }
+
+    placement_place()
+    {
+        if (game.mouse_cell != null)
+        {
+            let ship_ = this._get_current_ship();
+            let placement = this._is_valid_placement(
+                game.mouse_cell.object.value, game.ship_dir);
+
+            if (placement == false)
+            {
+                return;
+            }
+
+            this.ship = this.ship + 1;
+            Array.prototype.push.apply(this.locked, placement);
+            ship_.set_default_material();
+            ship_.visible = true;
+        }
+
+        if (this.ship >= 3)
+        {
+            this.shoot_init();
+        }
+    }
+
+    placement_place_random()
+    {
+        while (this.ship < 3)
+        {
+            let x, y, z, placement;
+
+            do
+            {
+                x = Math.floor(Math.random() * 5);
+                z = Math.floor(Math.random() * 5);
+                y = Math.floor(Math.random() * 2);
+                placement = this._is_valid_placement([x, z], y);
+            } 
+            while (placement == false);
+
+            Array.prototype.push.apply(this.locked, placement);
+            let ship = this._get_current_ship();
+            ship.position.set(x, 0, z);
+            ship.rotate(y);
+            ship.set_default_material();
+
+            this.ship = this.ship + 1;
+        }
+    }
+
+    placement_rotate()
+    {
+        this.ship_dir = 1 - this.ship_dir;
+        this.placement_preview();
+    }
+
+}
+
+class GridCell extends THREE.Object3D
+{
+    constructor(x, z)
     {
         super();
-        this.cells = [];
-        this.ships = [];
 
-        this.position.set(-3,0,-3);
+        this.line_material = new THREE.LineBasicMaterial({color: 0x505050});
 
         this.default_material = new THREE.MeshPhongMaterial(
             { color: 0x606060 * 1, side: THREE.DoubleSide });
@@ -17,343 +365,228 @@ class PlayerGrid extends THREE.Object3D
         this.default_material.transparent = true;
 
         this.hover_material = new THREE.MeshPhongMaterial(
-            { color: 0xffffff * 0.5, side: THREE.DoubleSide });
+            { color: 0x7fffff, side: THREE.DoubleSide });
         this.hover_material.opacity = 0.3;
         this.hover_material.transparent = true;
-        
-        this.line_material = new THREE.LineBasicMaterial({color: 0x606060});
 
-        this.ship_loader = new GLTFLoader();
-
-        var player_grid = this;
-
-        this.ship_loader.load(
-            'ship2.glb',
-            function ( gltf ) {
-                gltf.scene.rotation.set(0, -Math.PI / 2, 0);
-                gltf.scene.position.set(1,0,0);
-                gltf.scene.traverse((o) => {
-                    if (o.isMesh){
-                        o.default_material = o.material;
-                        o.hover_material = player_grid.hover_material;
-                        o.position.set(2, 0.6, 0.5);
-                    }
-                });
-                player_grid.ships.push(gltf.scene);
-                player_grid.ship2 = gltf.scene;
-                player_grid.add(gltf.scene);
-            }
-        );
-
-        this.ship_loader.load(
-            'ship3.glb',
-            function ( gltf ) {
-                gltf.scene.rotation.set(0, -Math.PI / 2, 0);
-                gltf.scene.position.set(3,0,3);
-                gltf.scene.traverse((o) => {
-                    if (o.isMesh){
-                        o.default_material = o.material;
-                        o.hover_material = player_grid.hover_material;
-                        o.position.set(1.5, 1, 0.5);
-                    }
-                });
-                player_grid.ships.push(gltf.scene);
-                player_grid.ship3 = gltf.scene;
-                player_grid.add(gltf.scene);
-            }
-        );
-
-        this.ship_loader.load(
-            'ship4.glb',
-            function ( gltf ) {
-                gltf.scene.rotation.set(0, 0, 0);
-                gltf.scene.position.set(2,0,1);
-                gltf.scene.traverse((o) => {
-                    if (o.isMesh){
-                        o.default_material = o.material;
-                        o.hover_material = player_grid.hover_material;
-                        o.rotation.set(0.04, 0, 0);
-                        o.position.set(2, 1, 0.5);
-                    }
-                });
-                player_grid.ships.push(gltf.scene);
-                player_grid.ship4 = gltf.scene;
-                player_grid.add(gltf.scene);
-            }
-        );
-
-        const shape = new THREE.Shape()
-            .moveTo( 0, 0 )
-            .lineTo( 0, sqLength )
-            .lineTo( sqLength, sqLength )
-            .lineTo( sqLength, 0 )
-            .lineTo( 0, 0 );
+        let shape = new THREE.Shape()
+            .moveTo( -0.5, -0.5 )
+            .lineTo( -0.5, 0.5 )
+            .lineTo( 0.5, 0.5 )
+            .lineTo( 0.5, -0.5 )
+            .lineTo( -0.5, -0.5 );
         shape.autoClose = true;
-
+        
         const points = shape.getPoints();
             
         let geometry = new THREE.ShapeGeometry( shape );
 
         const geometryPoints =
             new THREE.BufferGeometry().setFromPoints( points );
+
+        this.mesh = new THREE.Mesh(geometry, this.default_material);
+        this.value = [x, z];
+        this.mesh.value = [x, z];
+        this.mesh.default_material = this.default_material;
+        this.mesh.hover_material = this.hover_material;
+        this.mesh.position.set(0, 0, 0);
+        this.mesh.rotation.set(Math.PI / 2, 0, 0);
+        this.add(this.mesh);
+    
+        let line = new THREE.Line( geometryPoints, this.line_material);
+        line.position.set(0, 0, 0);
+        line.rotation.set(Math.PI / 2, 0, 0);
+        this.add(line);
+    }
+}
+
+class PlayerGrid extends THREE.Object3D
+{
+    constructor()
+    {
+        super();
+        this.cells = [];
+        this.ships = [];
+
+        this.group = new THREE.Group();
+        this.group.position.set(-2.5, 0, -2.5);
+        super.add(this.group);
+
+        this.ship2 = new Ship('ship2.glb', 2, 0, 0.6, 0.5);
+        this.ships.push(this.ship2);
+        this.add(this.ship2);
+
+        this.ship3 = new Ship('ship3.glb', 3, 0, 0.8, 0.9);
+        this.ships.push(this.ship3);
+        this.add(this.ship3);
+
+        this.ship4 = new Ship('ship4.glb', 4, 0, 1, 1.6);
+        this.ships.push(this.ship4);
+        this.add(this.ship4);
+            
         for (let x_ = 0; x_ < 6; x_++)
         {
             for (let z_ = 0; z_ < 6; z_++)
             {
-            
-                let mesh = new THREE.Mesh(geometry, this.default_material);
-                mesh.default_material = this.default_material;
-                mesh.hover_material = this.hover_material;
-                mesh.position.set(x_ * sqLength, 0, z_ * sqLength );
-                mesh.rotation.set(Math.PI / 2, 0, 0 );
-                this.add(mesh);
-                this.cells.push(mesh);
-            
-                let line = new THREE.Line( geometryPoints, this.line_material);
-                line.position.set(x_ * sqLength, 0, z_ * sqLength );
-                line.rotation.set(Math.PI / 2, 0, 0 );
-                this.add( line );
+                let cell = new GridCell(x_, z_);
+                cell.position.set(x_, 0, z_);
+                this.cells.push(cell.mesh);
+                this.add(cell);
             }
         }
     }
-}
 
-let camera, scene, renderer;
-
-let isUserInteracting = false,
-    onPointerDownMouseX = 0, onPointerDownMouseY = 0,
-    lon = 0, onPointerDownLon = 0,
-    lat = 0, onPointerDownLat = 0,
-    phi = 0, theta = 0;
-
-const sqLength = 1;
-
-const squareShape = new THREE.Shape()
-    .moveTo( 0, 0 )
-    .lineTo( 0, sqLength )
-    .lineTo( sqLength, sqLength )
-    .lineTo( sqLength, 0 )
-    .lineTo( 0, 0 );
-
-const container = document.getElementById( 'container' );
-const container_rect = container.getBoundingClientRect();
-
-init();
-
-function init() {
-
-
-    camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 1100 );
-
-    const listener = new THREE.AudioListener();
-    camera.add( listener );
-
-    // create a global audio source
-    const sound = new THREE.Audio( listener );
-
-    // load a sound and set it as the Audio object's buffer
-    const audioLoader = new THREE.AudioLoader();
-    audioLoader.load( 'pirates_revenge.mp3', function( buffer ) {
-        sound.setBuffer( buffer );
-        sound.setLoop( true );
-        sound.setVolume( 0.5 );
-        sound.play();
-    });
-
-    scene = new THREE.Scene();
-
-    const ambient_light = new THREE.AmbientLight(0xffffff, 0.3);
-    scene.add(ambient_light);
-
-    const directional_light = new THREE.DirectionalLight(0xffffff, 5);
-    directional_light.position.set(100, 100, 0);
-    scene.add(directional_light);
-
-    const geometry = new THREE.SphereGeometry( 500, 60, 40 );
-    // invert the geometry on the x-axis so that all of the faces point inward
-    geometry.scale( - 1, 1, 1 );
-
-    const texture = new THREE.TextureLoader().load( 'space.jpg' );
-    texture.colorSpace = THREE.SRGBColorSpace;
-    const material = new THREE.MeshBasicMaterial( { map: texture } );
-
-    const mesh = new THREE.Mesh( geometry, material );
-
-    scene.add( mesh );
-
-    var grid1 = new PlayerGrid(0, 0, 0);
-    grid1.position.set(-8,  0, -3);
-    var grid2 = new PlayerGrid(0, 0, 0);
-    grid2.rotation.set(0, Math.PI, 0);
-    grid2.position.set(8,  0, 3);
-    scene.add(grid1, grid2);
-
-    renderer = new THREE.WebGLRenderer();
-    renderer.setPixelRatio( window.devicePixelRatio );
-    renderer.setSize( window.innerWidth, window.innerHeight );
-    renderer.setAnimationLoop( animate );
-    container.appendChild( renderer.domElement );
-
-    container.style.touchAction = 'none';
-    container.addEventListener( 'pointerdown', onPointerDown );
-
-    document.addEventListener( 'wheel', onDocumentMouseWheel );
-
-    //
-
-    document.addEventListener( 'dragover', function ( event ) {
-
-        event.preventDefault();
-        event.dataTransfer.dropEffect = 'copy';
-
-    } );
-
-    document.addEventListener( 'dragenter', function () {
-
-        document.body.style.opacity = 0.5;
-
-    } );
-
-    document.addEventListener( 'dragleave', function () {
-
-        document.body.style.opacity = 1;
-
-    } );
-
-    document.addEventListener( 'drop', function ( event ) {
-
-        event.preventDefault();
-
-        const reader = new FileReader();
-        reader.addEventListener( 'load', function ( event ) {
-
-            material.map.image.src = event.target.result;
-            material.map.needsUpdate = true;
-
-        } );
-        reader.readAsDataURL( event.dataTransfer.files[ 0 ] );
-
-        document.body.style.opacity = 1;
-
-    } );
-
-
-    window.addEventListener( 'resize', onWindowResize );
-    document.addEventListener('mousemove', onHover(grid1.cells));
-
-}
-
-
-function onWindowResize() {
-
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-
-    renderer.setSize( window.innerWidth, window.innerHeight );
-
-}
-
-function onPointerDown( event ) {
-
-    if ( event.isPrimary === false ) return;
-
-    isUserInteracting = true;
-
-    onPointerDownMouseX = event.clientX;
-    onPointerDownMouseY = event.clientY;
-
-    onPointerDownLon = lon;
-    onPointerDownLat = lat;
-
-    document.addEventListener( 'pointermove', onPointerMove );
-    document.addEventListener( 'pointerup', onPointerUp );
-
-}
-
-function onPointerMove( event ) {
-
-    if ( event.isPrimary === false ) return;
-
-    lon = ( onPointerDownMouseX - event.clientX ) * 0.1 + onPointerDownLon;
-    lat = ( event.clientY - onPointerDownMouseY ) * 0.1 + onPointerDownLat;
-
-}
-
-var lastSelected = null;
-
-function onHover(objects)
-{
-    function onMouseMove( event )
+    add(object)
     {
-        event.preventDefault();
-        var mouse3D = new THREE.Vector3(
-            ( event.clientX / window.innerWidth ) * 2 - 1,   
-            -( event.clientY / window.innerHeight ) * 2 + 1,  
-            0.5 );
-        var raycaster = new THREE.Raycaster();                                        
-        raycaster.setFromCamera(mouse3D, camera);
-        var intersects = raycaster.intersectObjects(objects, true);
-        if ( intersects.length > 0 )
-        {
-            var selected = intersects[0];
-            if (selected != lastSelected)
-            {
-                if (lastSelected != null)
-                {
-                    lastSelected.object.material =
-                        lastSelected.object.default_material;
-                }
-                lastSelected = selected;
-                selected.object.material = selected.object.hover_material;
-            }
-            console.log("Hover");
-        }
-        else
-        {
-            if (lastSelected != null)
-            {
-                lastSelected.object.material =
-                    lastSelected.object.default_material;
-            }
-            lastSelected = null;
-        }
+        this.group.add(object);
     }
-    return onMouseMove
 }
 
+class Ship extends THREE.Object3D
+{
+    constructor(file, length, x, y, z)
+    {
+        super();
+        this.length = length;
 
-function onPointerUp() {
+        this.group = new THREE.Group();
+        this.add(this.group);
+        this.group.position.set(0, 0, 0);
 
-    if ( event.isPrimary === false ) return;
+        this.hover_material = new THREE.MeshPhongMaterial(
+            { color: 0x7fffff, side: THREE.DoubleSide });
+        this.hover_material.opacity = 0.3;
+        this.hover_material.transparent = true;
 
-    isUserInteracting = false;
+        this.death_material = new THREE.MeshPhongMaterial(
+            { color: 0x000000, side: THREE.DoubleSide });
 
-    document.removeEventListener( 'pointermove', onPointerMove );
-    document.removeEventListener( 'pointerup', onPointerUp );
+        this.ship_loader = new GLTFLoader();
+        var _this = this;
+        this.ship_loader.load(
+            file,
+            function ( gltf ) {
+                gltf.scene.traverse((o) => {
+                    if (o.isMesh){
+                        _this.group.add(o);
+                        o.default_material = o.material;
+                        o.rotation.set(0, -Math.PI / 2, 0);
+                        o.position.set(x, y, z);
+                    }
+                });
+            }
+        );
 
+        this.visible = false;
+    }
+
+    set_hover_material()
+    {
+        this.visible = true;
+        this.traverse((o) => {
+            if (o.isMesh)
+            {
+                o.material = this.hover_material;
+            }
+        });
+    }
+
+    set_death_material()
+    {
+        this.visible = true;
+        this.traverse((o) => {
+            if (o.isMesh)
+            {
+                o.material = this.death_material;
+            }
+        });
+    }
+
+    set_default_material()
+    {
+        this.visible = true;
+        this.traverse((o) => {
+            if (o.isMesh)
+            {
+                o.material = o.default_material;
+            }
+        })
+    }
+
+    rotate(direction)
+    {
+        this.rotation.set(0, direction * Math.PI / 2, 0);
+    }
 }
 
-function onDocumentMouseWheel( event ) {
+class SkyBox extends THREE.Object3D
+{
+    constructor()
+    {
+        super();
+        this.geometry = new THREE.SphereGeometry(500, 60, 40);
+        this.geometry.scale(-1, 1, 1);
 
-    lon = lon + event.deltaY * 0.05;
+        this.texture = new THREE.TextureLoader().load( 'space.jpg' );
+        this.texture.colorSpace = THREE.SRGBColorSpace;
+        this.material = new THREE.MeshBasicMaterial({map: this.texture});
 
-    camera.updateProjectionMatrix();
+        this.mesh = new THREE.Mesh(this.geometry, this.material);
 
+        this.add(this.mesh);
+    }
 }
 
-function animate() {
+const game = new PiratesRevengeGame();
 
-    lat = 35;
-    phi = THREE.MathUtils.degToRad( 90 - lat );
-    theta = THREE.MathUtils.degToRad( lon );
+function onWindowResize()
+{
+    game.camera.aspect = window.innerWidth / window.innerHeight;
+    game.camera.updateProjectionMatrix();
+    game.renderer.setSize( window.innerWidth, window.innerHeight );
+}
 
-    const x = 6 * Math.sin( phi ) * Math.cos( theta );
-    const y = 6 * Math.cos( phi );
-    const z = 6 * Math.sin( phi ) * Math.sin( theta );
+function onDocumentMouseWheel( event )
+{
+    game.lon = game.lon + event.deltaY * 0.05;
+    game.camera.updateProjectionMatrix();
+}
 
-    camera.position.set(-5 * sqLength + x, y, z);
-    camera.lookAt( -5 * sqLength, - sqLength, 0 );
-    camera.updateProjectionMatrix();
-    renderer.render( scene, camera );
+function shoot_mousemove(event)
+{
+    event.preventDefault();
+    game.shoot_hover(event);
+}
 
+function placement_mousemove(event)
+{
+    event.preventDefault();
+    game.placement_hover(event);
+}
+
+function placement_click(event)
+{
+    event.preventDefault();
+    game.placement_place();
+}
+
+function placement_contextmenu(event)
+{
+    event.preventDefault();
+    game.placement_rotate();
+}
+
+function animate()
+{
+    var phi = THREE.MathUtils.degToRad(55);
+    game.theta = THREE.MathUtils.degToRad(game.lon);
+
+    const x = 6 * Math.sin(phi) * Math.cos(game.theta);
+    const y = 6 * Math.cos(phi);
+    const z = 6 * Math.sin(phi) * Math.sin(game.theta);
+
+    game.camera.position.set(0 + x, y, z);
+    game.camera.lookAt(0, - 1, 0);
+    game.camera.updateProjectionMatrix();
+    game.renderer.render(game.scene, game.camera);
 }

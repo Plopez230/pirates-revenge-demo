@@ -24,7 +24,8 @@ button {
 
 #info {
 	position: absolute;
-	top: 0px;
+	top: auto;
+	bottom: 0px;
 	width: 100%;
 	padding: 10px;
 	box-sizing: border-box;
