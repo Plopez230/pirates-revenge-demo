@@ -73,6 +73,9 @@ class PiratesRevengeGame
 
         this.skybox = new SkyBox();
         this.scene.add(this.skybox);
+
+        this.hit = new Hit(0, 0, 0);
+        this.scene.add(this.hit);
     }
 
     _renderer()
@@ -115,6 +118,8 @@ class PiratesRevengeGame
         document.removeEventListener('contextmenu', placement_contextmenu);
         document.removeEventListener('mousemove', placement_mousemove);
         document.addEventListener('mousemove', shoot_mousemove);
+        document.addEventListener('click', shoot_click);
+        this.hit.start_animations();
     }
 
     placement_timer(duration)
@@ -241,6 +246,41 @@ class PiratesRevengeGame
             }
             this.mouse_cell = null;
         }
+    }
+
+    shoot_shoot()
+    {
+        let cell = this.mouse_cell;
+
+        if (cell == null)
+        {
+            return;
+        }
+
+        let pos = cell.object.value;
+        let target = new THREE.Vector3();
+        let hit = false;
+
+        for (let i = 0; i < game.locked.length; i++)
+        {
+            if (game.locked[i][0] == pos[0] && game.locked[i][1] == pos[1])
+            {
+                hit = true;
+            }
+        }
+
+        cell.object.getWorldPosition(target);
+        this.hit.position.set(target.x, target.y, target.z);
+
+        if (hit)
+        {
+            this.hit.hit();
+        }
+        else
+        {
+            this.hit.miss();
+        }
+        this.hit.start_animations();
     }
 
     placement_hover(event)
@@ -541,7 +581,62 @@ class SkyBox extends THREE.Object3D
     }
 }
 
+class Hit extends THREE.Object3D
+{
+    constructor(x, y, z)
+    {
+        super();
+
+        this.animating = false;
+        this.loader = new GLTFLoader();
+        this.scale.set(0.3, 0.3, 0.3);
+        var _this = this;
+        this.loader.load(
+            "hit.glb",
+            function ( gltf ) {
+                gltf.scene.traverse((o) => {
+                    if (o.isMesh){
+                        _this.add(gltf.scene);
+                        _this.animations = gltf.animations;
+                        _this.scene = gltf.scene;
+                        console.log(_this.animations);
+                        o.position.set(x, y, z);
+                    }
+                });
+            }
+        );
+        this.visible = false;
+    }
+
+    hit()
+    {
+        this.visible = true;
+        this.animating = true;
+        this.mixer = new THREE.AnimationMixer(this.scene);
+        const firstAction = this.mixer.clipAction(this.animations[0]);
+        const secondAction = this.mixer.clipAction(this.animations[1]);
+        firstAction.setLoop(THREE.LoopOnce);
+        secondAction.setLoop(THREE.LoopOnce);
+        firstAction.clampWhenFinished = true;
+        secondAction.clampWhenFinished = true;
+        firstAction.play();
+        secondAction.play();
+    }
+
+    miss()
+    {
+        this.visible = true;
+        this.animating = true;
+        this.mixer = new THREE.AnimationMixer(this.scene);
+        const firstAction = this.mixer.clipAction(this.animations[0]);
+        firstAction.setLoop(THREE.LoopOnce);
+        firstAction.clampWhenFinished = true;
+        firstAction.play();
+    }
+}
+
 var game = new PiratesRevengeGame();
+const clock = new THREE.Clock();
 
 document.getElementById("play").addEventListener("click", function(){
     game.start();
@@ -566,6 +661,12 @@ function shoot_mousemove(event)
     game.shoot_hover(event);
 }
 
+function shoot_click(event)
+{
+    event.preventDefault();
+    game.shoot_shoot();
+}
+
 function placement_mousemove(event)
 {
     event.preventDefault();
@@ -586,6 +687,13 @@ function placement_contextmenu(event)
 
 function animate()
 {
+    const delta = clock.getDelta();
+
+    if (game.hit.animating == true)
+    {
+        game.hit.mixer.update(delta);
+    }
+
     var phi = THREE.MathUtils.degToRad(55);
     game.theta = THREE.MathUtils.degToRad(game.lon);
 
