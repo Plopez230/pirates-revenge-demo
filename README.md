@@ -1,15 +1,8 @@
-### Module installation
+
+### Run docker compose
 
 ```
-npm install --save three # threeJS
-
-npm install --save-dev vite # server
-```
-
-### Run server
-
-```
-npx vite
+docker compose up --build
 ```
 
 ### Play
