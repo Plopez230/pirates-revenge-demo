@@ -61,7 +61,7 @@ export class View extends GameView
 
         this.audioLoader = new THREE.AudioLoader();
         this.audioLoader.load(
-            '/assets/pirates_revenge.mp3',
+            './assets/pirates_revenge.mp3',
             function(buffer) {
                 sound_.setBuffer(buffer);
                 sound_.setLoop(true);
@@ -86,15 +86,15 @@ export class View extends GameView
         this.scene.add(this.home_grid);
 
         this.home_small = new Ship(
-            '/assets/ship2.glb', "home", "small",
+            './assets/ship2.glb', "home", "small",
             0, 0.6, 0.5, this.model);
         this.home_grid.add(this.home_small);
         this.home_medium = new Ship(
-            '/assets/ship3.glb', "home", "medium",
+            './assets/ship3.glb', "home", "medium",
             0, 0.8, 0.9, this.model);
             this.home_grid.add(this.home_medium);
         this.home_large = new Ship(
-            '/assets/ship4.glb', "home", "large",
+            './assets/ship4.glb', "home", "large",
             0, 1, 1.6, this.model);
             this.home_grid.add(this.home_large);
 
@@ -104,15 +104,15 @@ export class View extends GameView
         this.scene.add(this.guest_grid);
 
         this.guest_small = new Ship(
-            '/assets/ship2.glb', "guest", "small",
+            './assets/ship2.glb', "guest", "small",
             0, 0.6, 0.5, this.model);
         this.guest_grid.add(this.guest_small);
         this.guest_medium = new Ship(
-            '/assets/ship3.glb', "guest", "medium",
+            './assets/ship3.glb', "guest", "medium",
             0, 0.8, 0.9, this.model);
             this.guest_grid.add(this.guest_medium);
         this.guest_large = new Ship(
-            '/assets/ship4.glb', "guest", "large",
+            './assets/ship4.glb', "guest", "large",
             0, 1, 1.6, this.model);
             this.guest_grid.add(this.guest_large);
 

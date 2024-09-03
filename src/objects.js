@@ -251,7 +251,7 @@ export class SkyBox extends THREE.Object3D
         this.geometry.scale(-1, 1, 1);
 
         this.texture = new THREE.TextureLoader().load(
-            '/assets/space.jpg' );
+            './assets/space.jpg' );
         this.texture.colorSpace = THREE.SRGBColorSpace;
         this.material = new THREE.MeshBasicMaterial({map: this.texture});
 
@@ -272,7 +272,7 @@ export class Asteroid extends THREE.Object3D
         this.scale.set(0.3, 0.3, 0.3);
         var _this = this;
         this.loader.load(
-            "/assets/hit.glb",
+            "./assets/hit.glb",
             function ( gltf ) {
                 gltf.scene.traverse((o) => {
                     if (o.isMesh){
